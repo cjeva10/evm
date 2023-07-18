@@ -263,31 +263,36 @@ mod tests {
     #[test]
     fn mul() {
         let setups = vec![
-            TestSetup::new( // 2 * 3 = 6
+            TestSetup::new(
+                // 2 * 3 = 6
                 "PUSH1 0x02\nPUSH1 0x03\nMUL",
                 "6002600302",
                 vec!["0x6"],
                 true,
             ),
-            TestSetup::new( // 0 * 3 = 0
+            TestSetup::new(
+                // 0 * 3 = 0
                 "PUSH1 0x00\nPUSH1 0x03\nMUL",
                 "6000600302",
                 vec!["0x0"],
                 true,
             ),
-            TestSetup::new( // 1 * 3 = 3
+            TestSetup::new(
+                // 1 * 3 = 3
                 "PUSH1 0x01\nPUSH1 0x03\nMUL",
                 "6001600302",
                 vec!["0x3"],
                 true,
             ),
-            TestSetup::new( // 1 * 1 = 1
+            TestSetup::new(
+                // 1 * 1 = 1
                 "PUSH1 0x01\nPUSH1 0x01\nMUL",
                 "6001600102",
                 vec!["0x1"],
                 true,
             ),
-            TestSetup::new( // 0 * 0 = 0
+            TestSetup::new(
+                // 0 * 0 = 0
                 "PUSH1 0x00\nPUSH1 0x00\nMUL",
                 "6000600002",
                 vec!["0x0"],
@@ -324,5 +329,101 @@ mod tests {
         let setup = TestSetup::new(asm, bin, expect_stack, expect_success);
 
         run_test(setup);
+    }
+
+    #[test]
+    fn sub() {
+        let setups = vec![
+            TestSetup::new(
+                // 3 - 2 = 1
+                "PUSH1 0x02\nPUSH1 0x03\nSUB",
+                "6002600303",
+                vec!["0x1"],
+                true,
+            ),
+            TestSetup::new(
+                // 3 - 0 = 3
+                "PUSH1 0x00\nPUSH1 0x03\nSUB",
+                "6000600303",
+                vec!["0x3"],
+                true,
+            ),
+            TestSetup::new(
+                // 0 - 0 = 0
+                "PUSH1 0x00\nPUSH1 0x00\nSUB",
+                "6000600003",
+                vec!["0x0"],
+                true,
+            ),
+        ];
+
+        for setup in setups {
+            run_test(setup);
+        }
+    }
+
+    #[test]
+    fn sub_underflow() {
+        let setup = TestSetup::new(
+            // 2 - 3 = MAX 
+            "PUSH1 0x03\nPUSH1 0x02\nSUB",
+            "6003600203",
+            vec!["0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"],
+            true,
+        );
+
+        run_test(setup);
+    }
+
+    #[test]
+    fn div() {
+        let setups = vec![
+            TestSetup::new(
+                // 4 / 2 = 1
+                "PUSH1 0x02\nPUSH1 0x04\nDIV",
+                "6002600404",
+                vec!["0x2"],
+                true,
+            ),
+            TestSetup::new(
+                // 3 / 2 = 1
+                "PUSH1 0x02\nPUSH1 0x03\nDIV",
+                "6002600304",
+                vec!["0x1"],
+                true,
+            ),
+            TestSetup::new(
+                // 2 / 3 = 0
+                "PUSH1 0x03\nPUSH1 0x02\nDIV",
+                "6003600204",
+                vec!["0x0"],
+                true,
+            ),
+            TestSetup::new(
+                // 3 / 0 = 0
+                "PUSH1 0x00\nPUSH1 0x03\nDIV",
+                "6000600304",
+                vec!["0x0"],
+                true,
+            ),
+            TestSetup::new(
+                // 0 / 3 = 0
+                "PUSH1 0x03\nPUSH1 0x00\nDIV",
+                "6003600004",
+                vec!["0x0"],
+                true,
+            ),
+            TestSetup::new(
+                // 0 / 0 = 0
+                "PUSH1 0x00\nPUSH1 0x00\nDIV",
+                "6000600004",
+                vec!["0x0"],
+                true,
+            ),
+        ];
+
+        for setup in setups {
+            run_test(setup);
+        }
     }
 }
