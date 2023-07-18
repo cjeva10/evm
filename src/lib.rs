@@ -9,7 +9,6 @@ pub struct EvmResult {
 
 // opcode aliases
 const STOP: u8 = 0x00;
-
 const POP: u8 = 0x50;
 const PUSH0: u8 = 0x5f;
 const PUSH1: u8 = 0x60;
@@ -64,7 +63,31 @@ pub fn evm(_code: impl AsRef<[u8]>) -> EvmResult {
 mod tests {
     use super::*;
 
-    fn run_test(asm: &str, bin: &str, expect_stack: Vec<&str>, expect_success: bool) {
+    struct TestSetup {
+        asm: String,
+        bin: String,
+        expect_stack: Vec<String>,
+        expect_success: bool,
+    }
+
+    impl TestSetup {
+        fn new(asm: &str, bin: &str, expect_stack: Vec<&str>, expect_success: bool) -> Self {
+            let stack = expect_stack.iter().map(|s| s.to_string()).collect();
+            Self {
+                asm: asm.to_string(),
+                bin: bin.to_string(),
+                expect_stack: stack,
+                expect_success,
+            }
+        }
+    }
+
+    fn run_test(setup: TestSetup) {
+        let asm = setup.asm;
+        let bin = setup.bin;
+        let expect_stack = setup.expect_stack;
+        let expect_success = setup.expect_success;
+
         let code: Vec<u8> = hex::decode(bin).unwrap();
 
         let result = evm(&code);
@@ -115,7 +138,9 @@ mod tests {
         let expect_stack = vec![];
         let expect_success = true;
 
-        run_test(asm, bin, expect_stack, expect_success);
+        let setup = TestSetup::new(asm, bin, expect_stack, expect_success);
+
+        run_test(setup);
     }
 
     #[test]
@@ -125,16 +150,179 @@ mod tests {
         let expect_stack = vec!["0x0"];
         let expect_success = true;
 
-        run_test(asm, bin, expect_stack, expect_success);
+        let setup = TestSetup::new(asm, bin, expect_stack, expect_success);
+
+        run_test(setup);
     }
 
     #[test]
-    fn push1() {
-        let asm = "PUSH1 1";
-        let bin = "6001";
+    fn pushes_one_value() {
+        let setups: Vec<TestSetup> = vec![
+            TestSetup::new("PUSH1 0x1", "6001", vec!["0x1"], true),
+            TestSetup::new("PUSH2 0x1122", "611122", vec!["0x1122"], true),
+            TestSetup::new("PUSH4 0x11223344", "6311223344", vec!["0x11223344"], true),
+            TestSetup::new(
+                "PUSH6 0x112233445566",
+                "65112233445566",
+                vec!["0x112233445566"],
+                true,
+            ),
+            TestSetup::new(
+                "PUSH10 0x112233445566778899aa",
+                "69112233445566778899aa",
+                vec!["0x112233445566778899aa"],
+                true,
+            ),
+            TestSetup::new(
+                "PUSH11 0x112233445566778899aabb",
+                "6a112233445566778899aabb",
+                vec!["0x112233445566778899aabb"],
+                true,
+            ),
+            TestSetup::new(
+                "PUSH32 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                vec!["0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"],
+                true,
+            ),
+        ];
+
+        for setup in setups {
+            run_test(setup);
+        }
+    }
+
+    #[test]
+    fn push_twice() {
+        let setup = TestSetup::new("PUSH1 1\nPUSH1 2", "60016002", vec!["0x1", "0x2"], true);
+
+        run_test(setup);
+    }
+
+    #[test]
+    fn pop() {
+        let asm = "PUSH1 1\nPUSH1 2\nPOP";
+        let bin = "6001600250";
         let expect_stack = vec!["0x1"];
         let expect_success = true;
 
-        run_test(asm, bin, expect_stack, expect_success);
+        let setup = TestSetup::new(asm, bin, expect_stack, expect_success);
+
+        run_test(setup);
+    }
+
+    #[test]
+    fn stop_midway() {
+        let asm = "PUSH1 1\nSTOP\nPUSH1 2";
+        let bin = "6001006002";
+        let expect_stack = vec!["0x1"];
+        let expect_success = true;
+
+        let setup = TestSetup::new(asm, bin, expect_stack, expect_success);
+
+        run_test(setup);
+    }
+
+    #[test]
+    fn add_2plus2() {
+        let asm = "PUSH1 0x02\nPUSH1 0x02\nADD";
+        let bin = "6002600201";
+        let expect_stack = vec!["0x4"];
+        let expect_success = true;
+
+        let setup = TestSetup::new(asm, bin, expect_stack, expect_success);
+
+        run_test(setup);
+    }
+
+    #[test]
+    #[should_panic]
+    fn add_2plus2is5() {
+        let asm = "PUSH1 0x02\nPUSH1 0x02\nADD";
+        let bin = "6002600201";
+        let expect_stack = vec!["0x5"];
+        let expect_success = true;
+
+        let setup = TestSetup::new(asm, bin, expect_stack, expect_success);
+
+        run_test(setup);
+    }
+
+    #[test]
+    fn add_overflow() {
+        let asm = "PUSH32 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\nPUSH1 0x2\nADD";
+        let bin = "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff600201";
+        let expect_stack = vec!["0x1"];
+        let expect_success = true;
+
+        let setup = TestSetup::new(asm, bin, expect_stack, expect_success);
+
+        run_test(setup);
+    }
+
+    #[test]
+    fn mul() {
+        let setups = vec![
+            TestSetup::new( // 2 * 3 = 6
+                "PUSH1 0x02\nPUSH1 0x03\nMUL",
+                "6002600302",
+                vec!["0x6"],
+                true,
+            ),
+            TestSetup::new( // 0 * 3 = 0
+                "PUSH1 0x00\nPUSH1 0x03\nMUL",
+                "6000600302",
+                vec!["0x0"],
+                true,
+            ),
+            TestSetup::new( // 1 * 3 = 3
+                "PUSH1 0x01\nPUSH1 0x03\nMUL",
+                "6001600302",
+                vec!["0x3"],
+                true,
+            ),
+            TestSetup::new( // 1 * 1 = 1
+                "PUSH1 0x01\nPUSH1 0x01\nMUL",
+                "6001600102",
+                vec!["0x1"],
+                true,
+            ),
+            TestSetup::new( // 0 * 0 = 0
+                "PUSH1 0x00\nPUSH1 0x00\nMUL",
+                "6000600002",
+                vec!["0x0"],
+                true,
+            ),
+        ];
+
+        for setup in setups {
+            run_test(setup);
+        }
+    }
+
+    #[test]
+    #[should_panic]
+    fn mul_bad() {
+        let asm = "PUSH1 0x02\nPUSH1 0x03\nMUL";
+        let bin = "6002600302";
+        let expect_stack = vec!["0x7"];
+        let expect_success = true;
+
+        let setup = TestSetup::new(asm, bin, expect_stack, expect_success);
+
+        run_test(setup);
+    }
+
+    #[test]
+    fn mul_overflow() {
+        let asm = "PUSH32 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\nPUSH1 0x2\nMUL";
+        let bin = "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff600202";
+        let expect_stack =
+            vec!["0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe"];
+        let expect_success = true;
+
+        let setup = TestSetup::new(asm, bin, expect_stack, expect_success);
+
+        run_test(setup);
     }
 }
