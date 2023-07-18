@@ -1,4 +1,4 @@
-use primitive_types::{U256, U512};
+use primitive_types::U256;
 
 mod arithmetic;
 
@@ -14,7 +14,6 @@ const POP: u8 = 0x50;
 const PUSH0: u8 = 0x5f;
 const PUSH1: u8 = 0x60;
 const PUSH32: u8 = 0x7f;
-
 
 pub fn evm(_code: impl AsRef<[u8]>) -> EvmResult {
     let mut stack: Vec<U256> = Vec::new();
@@ -65,13 +64,7 @@ pub fn evm(_code: impl AsRef<[u8]>) -> EvmResult {
 mod tests {
     use super::*;
 
-
-    fn run_test(
-        asm: &str,
-        bin: &str,
-        expect_stack: Vec<&str>,
-        expect_success: bool,
-    ) {
+    fn run_test(asm: &str, bin: &str, expect_stack: Vec<&str>, expect_success: bool) {
         let code: Vec<u8> = hex::decode(bin).unwrap();
 
         let result = evm(&code);
