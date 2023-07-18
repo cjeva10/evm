@@ -53,7 +53,7 @@ pub fn evm(_code: impl AsRef<[u8]>) -> EvmResult {
             dup_swap::exec(opcode, &mut stack);
             continue;
         }
-         
+
         // basic opcodes
         match opcode {
             STOP => {
@@ -84,8 +84,8 @@ pub fn evm(_code: impl AsRef<[u8]>) -> EvmResult {
 
 #[cfg(test)]
 mod tests {
-    use primitive_types::U256;
     use crate::evm;
+    use primitive_types::U256;
 
     pub struct TestSetup {
         asm: String,
@@ -249,7 +249,6 @@ mod tests {
 
     #[test]
     fn invalid() {
-
         let asm = "INVALID";
         let bin = "fe";
         let expect_stack = vec![];
