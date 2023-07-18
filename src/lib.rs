@@ -41,14 +41,14 @@ impl<'a> Program<'a> {
 
 struct ProgramState {
     stack: Vec<U256>,
-    memory: [U256; 1024],
+    memory: [(U256, bool); 1024],
 }
 
 impl ProgramState {
     fn new() -> Self {
         Self {
             stack: Vec::new(),
-            memory: [U256::zero(); 1024],
+            memory: [(U256::zero(), false); 1024],
         }
     }
 }
@@ -101,6 +101,15 @@ pub fn evm(_code: impl AsRef<[u8]>) -> EvmResult {
                 &jumps,
             );
             // control flow opcodes can terminate the program
+            if let Some(result) = result {
+                return result;
+            }
+            continue;
+        }
+
+        // memory and storage opcodes
+        if opcode >= 0x51 && opcode <= 0x55 {
+            let result = memory::exec(opcode, &mut program.state.stack, &mut program.state.memory);
             if let Some(result) = result {
                 return result;
             }
