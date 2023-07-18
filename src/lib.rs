@@ -1,8 +1,11 @@
 use primitive_types::U256;
+use crate::utils::ValidJumps;
 
 mod arithmetic;
 mod cmp;
 mod dup_swap;
+mod flow;
+mod memory;
 mod utils;
 
 pub struct EvmResult {
@@ -17,40 +20,90 @@ const PUSH0: u8 = 0x5f;
 const PUSH1: u8 = 0x60;
 const PUSH32: u8 = 0x7f;
 const INVALID: u8 = 0xfe;
+const PC: u8 = 0x58;
+
+struct Program<'a> {
+    code: &'a [u8],
+    pc: usize,
+    state: ProgramState,
+}
+
+impl<'a> Program<'a> {
+    fn new<A: AsRef<[u8]> + 'a>(_code: &'a A) -> Self {
+        let code = _code.as_ref();
+        Self {
+            code,
+            pc: 0,
+            state: ProgramState::new(),
+        }
+    }
+}
+
+struct ProgramState {
+    stack: Vec<U256>,
+    memory: [U256; 1024],
+}
+
+impl ProgramState {
+    fn new() -> Self {
+        Self {
+            stack: Vec::new(),
+            memory: [U256::zero(); 1024],
+        }
+    }
+}
 
 pub fn evm(_code: impl AsRef<[u8]>) -> EvmResult {
-    let mut stack: Vec<U256> = Vec::new();
-    let mut pc = 0;
+    let mut program = Program::new(&_code);
 
-    let code = _code.as_ref();
+    // get all the valid jump destinations up front
+    let jumps = ValidJumps::new(program.code).jumps;
 
-    while pc < code.len() {
-        let opcode = code[pc];
-        pc += 1;
+    while program.pc < program.code.len() {
+        let opcode = program.code[program.pc];
+        program.pc += 1;
 
         // push byte value onto the stack
         if opcode >= PUSH1 && opcode <= PUSH32 {
             let size = (opcode - PUSH1 + 1) as usize;
-            stack.push(U256::from_big_endian(&code[pc..pc + size]));
-            pc += size;
+            program.state.stack.push(U256::from_big_endian(
+                &program.code[program.pc..program.pc + size],
+            ));
+            program.pc += size;
             continue;
         }
 
         // arithmetic operations
         if opcode >= 0x01 && opcode <= 0x0b {
-            arithmetic::exec(opcode, &mut stack);
+            arithmetic::exec(opcode, &mut program.state.stack);
             continue;
         }
 
         // comparison operations
         if opcode >= 0x10 && opcode < 0x20 {
-            cmp::exec(opcode, &mut stack);
+            cmp::exec(opcode, &mut program.state.stack);
             continue;
         }
 
         // dup and swap operations
         if opcode >= 0x80 && opcode <= 0x9f {
-            dup_swap::exec(opcode, &mut stack);
+            dup_swap::exec(opcode, &mut program.state.stack);
+            continue;
+        }
+
+        // control flow opcodes
+        if opcode == 0x56 || opcode == 0x57 || opcode == 0x5b {
+            let result = flow::exec(
+                opcode,
+                &mut program.state.stack,
+                &mut program.pc,
+                program.code,
+                &jumps,
+            );
+            // control flow opcodes can terminate the program
+            if let Some(result) = result {
+                return result;
+            }
             continue;
         }
 
@@ -58,17 +111,20 @@ pub fn evm(_code: impl AsRef<[u8]>) -> EvmResult {
         match opcode {
             STOP => {
                 return EvmResult {
-                    stack,
+                    stack: program.state.stack,
                     success: true,
                 }
             }
-            PUSH0 => stack.push(U256::zero()),
+            PUSH0 => program.state.stack.push(U256::zero()),
             POP => {
-                stack.pop();
+                program.state.stack.pop();
+            }
+            PC => {
+                program.state.stack.push(U256::from(program.pc - 1));
             }
             INVALID => {
                 return EvmResult {
-                    stack,
+                    stack: program.state.stack,
                     success: false,
                 }
             }
@@ -77,7 +133,7 @@ pub fn evm(_code: impl AsRef<[u8]>) -> EvmResult {
     }
 
     return EvmResult {
-        stack,
+        stack: program.state.stack,
         success: true,
     };
 }
@@ -257,5 +313,17 @@ mod tests {
         let setup = TestSetup::new(asm, bin, expect_stack, expect_success);
 
         run_test(setup);
+    }
+
+    #[test]
+    fn pc() {
+        let setups = vec![
+            TestSetup::new("PC", "58", vec!["0x0"], true),
+            TestSetup::new("PUSH1 0\nPOP\nPC", "60005058", vec!["0x3"], true),
+        ];
+
+        for setup in setups {
+            run_test(setup);
+        }
     }
 }
