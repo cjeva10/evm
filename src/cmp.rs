@@ -1,4 +1,4 @@
-use crate::arithmetic::{inv, is_negative};
+use crate::arithmetic::is_negative;
 use crate::utils::Stack;
 use primitive_types::U256;
 
@@ -23,7 +23,8 @@ fn sar(mut left: U256, right: U256) -> U256 {
     }
 
     // if the argument is negative, we fill with ones, else with zeros
-    if is_negative(left) { // negative
+    if is_negative(left) {
+        // negative
         if right >= U256::from(256) {
             return U256::MAX;
         } else {
@@ -31,12 +32,13 @@ fn sar(mut left: U256, right: U256) -> U256 {
             left >>= right;
             // set all the bits less than `right` to one
             left |= U256::MAX << right;
-            
+
             return left;
         }
-    } else { // postive
+    } else {
+        // postive
         if right >= U256::from(256) {
-            return U256::zero(); 
+            return U256::zero();
         } else {
             let right: usize = right.as_usize();
             return left >> right;
