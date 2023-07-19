@@ -1,11 +1,12 @@
-use std::collections::HashMap;
-use primitive_types::U256;
 use crate::utils::ValidJumps;
+use primitive_types::U256;
+use std::collections::HashMap;
 
 mod arithmetic;
 mod cmp;
 mod dup_swap;
 mod flow;
+mod hash;
 mod memory;
 mod utils;
 
@@ -42,14 +43,22 @@ impl<'a> Program<'a> {
 
 struct ProgramState {
     stack: Vec<U256>,
-    memory: HashMap<U256, u8>,
+    memory: Memory,
+}
+
+pub struct Memory {
+    pub data: HashMap<U256, u8>,
+    pub size: U256,
 }
 
 impl ProgramState {
     fn new() -> Self {
         Self {
             stack: Vec::new(),
-            memory: HashMap::new(),
+            memory: Memory {
+                data: HashMap::new(),
+                size: U256::zero(),
+            },
         }
     }
 }
@@ -109,12 +118,17 @@ pub fn evm(_code: impl AsRef<[u8]>) -> EvmResult {
         }
 
         // memory opcodes
-        if opcode >= 0x51 && opcode <= 0x53 {
+        if (opcode >= 0x51 && opcode <= 0x53) || opcode == 0x59 {
             let result = memory::exec(opcode, &mut program.state.stack, &mut program.state.memory);
             if let Some(result) = result {
                 return result;
             }
             continue;
+        }
+
+        // hash opcodes
+        if opcode == 0x20 {
+            hash::exec(opcode, &mut program.state.stack, &mut program.state.memory);
         }
 
         // basic opcodes
