@@ -1,5 +1,5 @@
-use primitive_types::{U256, U512};
 use crate::utils::Stack;
+use primitive_types::{U256, U512};
 
 // arithmetic opcodes
 const ADD: u8 = 0x01;
@@ -14,21 +14,77 @@ const MULMOD: u8 = 0x09;
 const EXP: u8 = 0x0a;
 const SIGNEXTEND: u8 = 0x0b;
 
-fn sdiv(stack: &mut Vec<U256>) {
-    let num = stack.safe_pop();
-    let mut num_bytes = [0; 32];
+fn smod(mut left: U256, mut right: U256) -> U256 {
+    if right == U256::zero() {
+        return right;
+    }
 
-    let den = stack.pop().unwrap();
-    let mut den_bytes = [0; 32];
+    let left_neg = is_negative(left);
+    let right_neg = is_negative(right);
 
-    num.to_little_endian(&mut num_bytes);
-    den.to_little_endian(&mut den_bytes);
+    // both are positive, return early
+    if !left_neg && !right_neg {
+        return left.checked_rem(right).unwrap_or(U256::zero());
+    }
 
-    let _num_sign = (num_bytes[31] & 0b1000_0000) > 0;
-    let _den_sign = (den_bytes[31] & 0b1000_0000) > 0;
+    // convert to positive representation if either value is negative
+    if left_neg {
+        left = inv(left);
+        println!("left {}", left);
+    }
+    if right_neg {
+        right = inv(right);
+    }
 
-    num_bytes[31] &= 0b0111_1111; // make sure the sign bit is zero
-    den_bytes[31] &= 0b0111_1111;
+    // postiive result
+    let pos = left.checked_rem(right).unwrap_or(U256::zero());
+
+    // if signs are same, invert and then return
+    if left_neg && right_neg {
+        return inv(pos);
+    }
+    pos
+}
+
+fn sdiv(mut left: U256, mut right: U256) -> U256 {
+    if right == U256::zero() {
+        return right;
+    }
+
+    let left_neg = is_negative(left);
+    let right_neg = is_negative(right);
+
+    // both are positive, return early
+    if !left_neg && !right_neg {
+        return left.checked_div(right).unwrap_or(U256::zero());
+    }
+
+    // convert to positive representation if either value is negative
+    if left_neg {
+        left = inv(left);
+    }
+    if right_neg {
+        right = inv(right);
+    }
+
+    // postiive result
+    let pos = left.checked_div(right).unwrap_or(U256::zero());
+
+    // if signs are different, invert and then return
+    if left_neg ^ right_neg {
+        return inv(pos);
+    }
+    pos
+}
+
+// invert a signed U256
+fn inv(val: U256) -> U256 {
+    !val + 1
+}
+
+// check if the given number is negative
+fn is_negative(x: U256) -> bool {
+    x.bit(31)
 }
 
 fn sign_extend(stack: &mut Vec<U256>) {
@@ -91,7 +147,10 @@ pub fn exec(opcode: u8, stack: &mut Vec<U256>) {
             stack.push(res);
         }
         SDIV => {
-            todo!();
+            let left = stack.safe_pop();
+            let right = stack.safe_pop();
+
+            stack.push(sdiv(left, right));
         }
         MOD => {
             let left = stack.safe_pop();
@@ -100,8 +159,11 @@ pub fn exec(opcode: u8, stack: &mut Vec<U256>) {
             stack.push(res);
         }
         SMOD => {
-            todo!();
-        },
+            let left = stack.safe_pop();
+            let right = stack.safe_pop();
+            let res = smod(left, right);
+            stack.push(res);
+        }
         ADDMOD => {
             let left = stack.safe_pop();
             let right = stack.safe_pop();
@@ -140,7 +202,7 @@ pub fn exec(opcode: u8, stack: &mut Vec<U256>) {
 
 #[cfg(test)]
 mod tests {
-    use crate::tests::{TestSetup, run_test};
+    use crate::tests::{run_test, TestSetup};
 
     #[test]
     fn add_2plus2() {
@@ -284,7 +346,7 @@ mod tests {
     #[test]
     fn sub_underflow() {
         let setup = TestSetup::new(
-            // 2 - 3 = MAX 
+            // 2 - 3 = MAX
             "PUSH1 0x03\nPUSH1 0x02\nSUB",
             "6003600203",
             vec!["0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"],
@@ -379,22 +441,22 @@ mod tests {
 
     #[test]
     fn add_mod() {
-         let setups = vec![
-             TestSetup::new(
-                 // 10 + 10 mod 8 = 4
-                 "PUSH1 8\nPUSH1 10\nPUSH1 10\nADDMOD",
-                 "6008600a600a08",
-                 vec!["0x04"],
-                 true,
-             ),
-             TestSetup::new(
-                 // wrapped
-                 "PUSH1 2\nPUSH1 2\nPUSH32 MAX\nADDMOD",
-                 "600260027fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff08",
-                 vec!["0x01"],
-                 true,
-             ),
-         ];
+        let setups = vec![
+            TestSetup::new(
+                // 10 + 10 mod 8 = 4
+                "PUSH1 8\nPUSH1 10\nPUSH1 10\nADDMOD",
+                "6008600a600a08",
+                vec!["0x04"],
+                true,
+            ),
+            TestSetup::new(
+                // wrapped
+                "PUSH1 2\nPUSH1 2\nPUSH32 MAX\nADDMOD",
+                "600260027fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff08",
+                vec!["0x01"],
+                true,
+            ),
+        ];
 
         for setup in setups {
             run_test(setup);
@@ -403,7 +465,7 @@ mod tests {
 
     #[test]
     fn mul_mod() {
-         let setups = vec![
+        let setups = vec![
              TestSetup::new(
                  // 10 * 10 mod 8 = 4
                  "PUSH1 8\nPUSH1 10\nPUSH1 10\nMULMOD",
@@ -419,6 +481,86 @@ mod tests {
                  true,
              ),
          ];
+
+        for setup in setups {
+            run_test(setup);
+        }
+    }
+
+    #[test]
+    fn exp() {
+        let setups = vec![TestSetup::new(
+            "PUSH1 2\nPUSH1 10\nEXP",
+            "6002600a0a",
+            vec!["0x64"],
+            true,
+        )];
+
+        for setup in setups {
+            run_test(setup);
+        }
+    }
+
+    #[test]
+    fn sign_extend_positive() {
+        let setups = vec![TestSetup::new(
+            "PUSH1 0xff\nPUSH1 0\nSIGNEXTEND",
+            "60ff60000b",
+            vec!["0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"],
+            true,
+        )];
+
+        for setup in setups {
+            run_test(setup);
+        }
+    }
+
+    #[test]
+    fn sdiv() {
+        let setups = vec![
+            TestSetup::new("PUSH1 10\nPUSH1 10\nSDIV", "600a600a05", vec!["0x1"], true),
+            TestSetup::new(
+                "PUSH32 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\nPUSH32 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe\nSDIV",
+                "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe05",
+                vec!["0x2"],
+                true,
+            ),
+            TestSetup::new(
+                "PUSH32 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe\nPUSH1 10\nSDIV",
+                "7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe600a05",
+                vec!["0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffb"],
+                true
+            ),
+            TestSetup::new(
+                "PUSH1 0x00\nPUSH32 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffd\nSDIV",
+                "60007ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffd05",
+                vec!["0x0"],
+                true,
+            )
+        ];
+
+        for setup in setups {
+            run_test(setup);
+        }
+    }
+
+    #[test]
+    fn smod() {
+        let setups = vec![
+            TestSetup::new("PUSH1 3\nPUSH1 10\nSMOD", "6003600a07", vec!["0x1"], true),
+            TestSetup::new(
+                "PUSH32 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffd\nPUSH32 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8\nSMOD",
+                "7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffd7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff807",
+                vec!["0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe"],
+                true,
+            ),
+            TestSetup::new(
+                "PUSH1 0x00\nPUSH32 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffd\nSMOD",
+                "60007ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffd07",
+                vec!["0x0"],
+                true,
+            )
+        ];
 
         for setup in setups {
             run_test(setup);
