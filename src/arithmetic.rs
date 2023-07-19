@@ -14,6 +14,16 @@ const MULMOD: u8 = 0x09;
 const EXP: u8 = 0x0a;
 const SIGNEXTEND: u8 = 0x0b;
 
+// invert a signed U256
+pub fn inv(val: U256) -> U256 {
+    !val + 1
+}
+
+// check if the given number is negative
+pub fn is_negative(x: U256) -> bool {
+    x.bit(255)
+}
+
 fn smod(mut left: U256, mut right: U256) -> U256 {
     if right == U256::zero() {
         return right;
@@ -75,16 +85,6 @@ fn sdiv(mut left: U256, mut right: U256) -> U256 {
         return inv(pos);
     }
     pos
-}
-
-// invert a signed U256
-fn inv(val: U256) -> U256 {
-    !val + 1
-}
-
-// check if the given number is negative
-fn is_negative(x: U256) -> bool {
-    x.bit(31)
 }
 
 fn sign_extend(stack: &mut Vec<U256>) {
