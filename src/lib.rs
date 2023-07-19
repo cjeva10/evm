@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use primitive_types::U256;
 use crate::utils::ValidJumps;
 
@@ -41,14 +42,14 @@ impl<'a> Program<'a> {
 
 struct ProgramState {
     stack: Vec<U256>,
-    memory: [(U256, bool); 1024],
+    memory: HashMap<U256, u8>,
 }
 
 impl ProgramState {
     fn new() -> Self {
         Self {
             stack: Vec::new(),
-            memory: [(U256::zero(), false); 1024],
+            memory: HashMap::new(),
         }
     }
 }
@@ -107,8 +108,8 @@ pub fn evm(_code: impl AsRef<[u8]>) -> EvmResult {
             continue;
         }
 
-        // memory and storage opcodes
-        if opcode >= 0x51 && opcode <= 0x55 {
+        // memory opcodes
+        if opcode >= 0x51 && opcode <= 0x53 {
             let result = memory::exec(opcode, &mut program.state.stack, &mut program.state.memory);
             if let Some(result) = result {
                 return result;
