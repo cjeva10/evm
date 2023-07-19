@@ -1,3 +1,4 @@
+use crate::arithmetic::{inv, is_negative};
 use crate::utils::Stack;
 use primitive_types::U256;
 
@@ -15,6 +16,33 @@ const BYTE: u8 = 0x1a;
 const SHL: u8 = 0x1b;
 const SHR: u8 = 0x1c;
 const SAR: u8 = 0x1d;
+
+fn sar(mut left: U256, right: U256) -> U256 {
+    if left == U256::zero() {
+        return U256::zero();
+    }
+
+    // if the argument is negative, we fill with ones, else with zeros
+    if is_negative(left) { // negative
+        if right >= U256::from(256) {
+            return U256::MAX;
+        } else {
+            let right: usize = right.as_usize();
+            left >>= right;
+            // set all the bits less than `right` to one
+            left |= U256::MAX << right;
+            
+            return left;
+        }
+    } else { // postive
+        if right >= U256::from(256) {
+            return U256::zero(); 
+        } else {
+            let right: usize = right.as_usize();
+            return left >> right;
+        }
+    }
+}
 
 pub fn exec(opcode: u8, stack: &mut Vec<U256>) {
     match opcode {
@@ -109,7 +137,12 @@ pub fn exec(opcode: u8, stack: &mut Vec<U256>) {
                 stack.push(shifted);
             }
         }
-        SAR => todo!(),
+        SAR => {
+            let right = stack.safe_pop();
+            let left = stack.safe_pop();
+            let res = sar(left, right);
+            stack.push(res);
+        }
         _ => panic!("Not a cmp or bitwise opcode!"),
     }
 }
@@ -328,6 +361,35 @@ mod tests {
                 "PUSH32 0x11ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\nPUSH1 0\nBYTE",
                 "7f11ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff60001a",
                 vec!["0x11"],
+                true,
+            ),
+        ];
+
+        for setup in setups {
+            run_test(setup);
+        }
+    }
+
+    #[test]
+    fn sar() {
+        let setups = vec![
+            TestSetup::new("PUSH1 2\nPUSH1 1\nSAR", "600260011d", vec!["0x1"], true),
+            TestSetup::new(
+                "PUSH32 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00\nPUSH1 4\nSAR", 
+                "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0060041d", 
+                vec!["0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0"], 
+                true
+            ),
+            TestSetup::new(
+                "PUSH32 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00\nPUSH4 0xFFFFFFFF\nSAR",
+                "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0063ffffffff1d",
+                vec!["0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"],
+                true,
+            ),
+            TestSetup::new(
+                "PUSH32 0x0FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00\nPUSH4 0xFFFFFFFF\nSAR",
+                "7f0fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0063ffffffff1d",
+                vec!["0x0"],
                 true,
             ),
         ];
