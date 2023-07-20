@@ -89,7 +89,11 @@ fn sdiv(mut left: U256, mut right: U256) -> U256 {
 
 fn sign_extend(stack: &mut Vec<U256>) {
     // number of bytes to read
-    let b = stack.safe_pop().as_usize();
+    let b = stack.safe_pop();
+    if b > 31.into() {
+        panic!("reading more than max word size")
+    }
+    let b = b.as_usize();
 
     // value to extend
     let x = stack.safe_pop();

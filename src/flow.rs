@@ -17,15 +17,12 @@ fn jump(
 ) -> Option<EvmResult> {
     println!("dest = {}", dest);
 
-    if dest >= U256::from(code.len()) {
+    if dest >= code.len().into() {
         panic!("Jump destination is out of bounds");
     }
-
     *pc = dest.as_usize();
 
-    println!("{}", jumps[*pc]);
     if let Some(jump) = jumps.get(*pc) {
-        println!("{}", jump);
         if !jump {
             return Some(EvmResult {
                 stack: stack.clone(),
