@@ -33,7 +33,7 @@ fn mstore(memory: &mut Memory, offset: U256, value: U256) {
     set_msize(memory, idx);
 }
 
-fn mload_n(memory: &mut Memory, mut offset: U256, size: U256) -> Vec<u8> {
+pub fn mload_n(memory: &mut Memory, mut offset: U256, size: U256) -> Vec<u8> {
     // by default allocate one word to the return array
     let mut bytes: Vec<u8> = Vec::with_capacity(32);
 
