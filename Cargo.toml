@@ -1,5 +1,5 @@
 [package]
-name = "simple-evm"
+name = "my-evm"
 version = "0.1.0"
 edition = "2021"
 
