@@ -1,16 +1,14 @@
 # Simple EVM
 
-A simple EVM implementation for learning purposes
+A simple EVM interpreter implementation for learning purposes
 
 ## Completed
 
- - arithmetic
+ - arithmetic (signed and unsigned)
  - boolean / bitwise operations
  - jumps / control flow
- - start of memory management
+ - memory management (`MSTORE`, `MLOAD` etc)
 
 ## TODO
 
- - Signed arithmetic
- - Memory and storage
  - Ethereum state opcodes
