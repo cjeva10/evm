@@ -6,8 +6,10 @@ A simple EVM interpreter implementation for learning purposes
 
  - arithmetic (signed and unsigned)
  - boolean / bitwise operations
+ - stack ops (`DUP` and `SWAP` etc)
  - jumps / control flow
  - memory management (`MSTORE`, `MLOAD` etc)
+ - `SHA3` opcode
 
 ## TODO
 
